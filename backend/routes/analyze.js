@@ -11,7 +11,7 @@ async function askAI(prompt) {
       model: 'meta/llama-3.1-8b-instruct',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
-      max_tokens: 2000
+      max_tokens: 500
     },
     {
       headers: {
@@ -89,10 +89,10 @@ GITHUB PROFILE:
 ${JSON.stringify(githubData.profile?.data?.[0] || {}, null, 2)}
 
 REPOSITORIES (${repos.length} total):
-${JSON.stringify(repos.slice(0, 10), null, 2)}
+${JSON.stringify(repos.slice(0, 3), null, 2)}
 
 LANGUAGES USED:
-${JSON.stringify(githubData.languages?.data || [], null, 2)}
+${JSON.stringify((githubData.languages?.data || []).slice(0, 5), null, 2)}
 
 PULL REQUESTS (from ${repoName}):
 ${JSON.stringify(githubData.prs?.data || [], null, 2)}
