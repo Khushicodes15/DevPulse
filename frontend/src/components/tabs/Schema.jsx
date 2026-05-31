@@ -103,15 +103,20 @@ export default function Schema() {
     )
   }
 
-  const githubTables = schema.github || []
-  const linearTables = schema.linear || []
-  const sentryTables = schema.sentry || []
+  const schemas = schema.schemas || {}
+  const githubTables = (schemas.github || []).map(t => t.table || t)
+  const linearTables = (schemas.linear || []).map(t => t.table || t)
+  const sentryTables = (schemas.sentry || []).map(t => t.table || t)
 
   const totalTables = githubTables.length + linearTables.length + sentryTables.length
 
   const displayedGithub = showAllGithub ? githubTables : githubTables.slice(0, 30)
-
-  const columns = selectedTable ? (schema.columns?.[selectedTable] || []) : []
+  const allColumns = schema.columns || {}
+  const githubCols = allColumns.github || []
+  const columns = selectedTable
+    ? githubCols.filter(c => c.table_name === selectedTable).map(c => c.column_name)
+    : []
+  
 
   return (
     <div>
