@@ -1,5 +1,14 @@
 require('dotenv').config();
 const express = require('express');
+
+// ── OAuth Env Verification ────────────────────────────────────────────────────
+console.log('\n[ENV] OAuth Configuration Check:');
+console.log(`[ENV]   GOOGLE_CLIENT_ID exists: ${!!process.env.GOOGLE_CLIENT_ID}`);
+console.log(`[ENV]   GOOGLE_CLIENT_SECRET exists: ${!!process.env.GOOGLE_CLIENT_SECRET}`);
+console.log(`[ENV]   GOOGLE_CALLBACK_URL exists: ${!!process.env.GOOGLE_CALLBACK_URL}`);
+console.log(`[ENV]   GITHUB_CLIENT_ID exists: ${!!process.env.GITHUB_CLIENT_ID}`);
+console.log(`[ENV]   GITHUB_CLIENT_SECRET exists: ${!!process.env.GITHUB_CLIENT_SECRET}`);
+console.log(`[ENV]   GITHUB_CALLBACK_URL exists: ${!!process.env.GITHUB_CALLBACK_URL}\n`);
 const cors = require('cors');
 const session = require('express-session');
 const passport = require('./auth/github');
@@ -33,7 +42,7 @@ app.get('/auth/github',
 app.get('/auth/github/callback',
   passport.authenticate('github', { failureRedirect: 'http://localhost:5173?error=github_failed' }),
   (req, res) => {
-    res.redirect('http://localhost:5173/scanning');
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/scanning`);
   }
 );
 

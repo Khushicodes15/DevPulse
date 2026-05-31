@@ -2,43 +2,50 @@ const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
 
+const FRONTEND = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+function createOAuth2Client() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const callbackUrl = process.env.GOOGLE_CALLBACK_URL;
+  if (!clientId || !clientSecret || !callbackUrl) {
+    const missing = [];
+    if (!clientId) missing.push('GOOGLE_CLIENT_ID');
+    if (!clientSecret) missing.push('GOOGLE_CLIENT_SECRET');
+    if (!callbackUrl) missing.push('GOOGLE_CALLBACK_URL');
+    throw new Error(`Gmail OAuth misconfigured. Missing env vars: ${missing.join(', ')}`);
+  }
+  return new google.auth.OAuth2(clientId, clientSecret, callbackUrl);
+}
+
 router.get('/auth', (req, res) => {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_CALLBACK_URL
-  );
-
-  const scopes = [
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/userinfo.profile'
-  ];
-
-  const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: scopes,
-    prompt: 'consent'
-  });
-
-  res.redirect(url);
+  try {
+    const oauth2Client = createOAuth2Client();
+    const scopes = [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile'
+    ];
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: scopes,
+      prompt: 'consent'
+    });
+    res.redirect(url);
+  } catch (err) {
+    console.error('Gmail auth error:', err.message);
+    res.redirect(`${FRONTEND}?error=gmail_failed`);
+  }
 });
 
 router.get('/callback', async (req, res) => {
   try {
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_CALLBACK_URL
-    );
-
+    const oauth2Client = createOAuth2Client();
     const { tokens } = await oauth2Client.getToken(req.query.code);
     oauth2Client.setCredentials(tokens);
 
-    // Store tokens in session
     req.session.googleTokens = tokens;
 
-    // Get user profile
     const people = google.people({ version: 'v1', auth: oauth2Client });
     const profile = await people.people.get({
       resourceName: 'people/me',
@@ -51,10 +58,10 @@ router.get('/callback', async (req, res) => {
       photo: profile.data.photos?.[0]?.url
     };
 
-    res.redirect('http://localhost:5173/dashboard?gmail=connected');
+    res.redirect(`${FRONTEND}/dashboard?gmail=connected`);
   } catch (err) {
     console.error('Gmail auth error:', err.message);
-    res.redirect('http://localhost:5173?error=gmail_failed');
+    res.redirect(`${FRONTEND}?error=gmail_failed`);
   }
 });
 
@@ -64,16 +71,10 @@ router.get('/data', async (req, res) => {
   }
 
   try {
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_CALLBACK_URL
-    );
-
+    const oauth2Client = createOAuth2Client();
     oauth2Client.setCredentials(req.session.googleTokens);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    // Fetch job-related email threads
     const threadList = await gmail.users.threads.list({
       userId: 'me',
       q: 'subject:(interview OR offer OR hiring OR recruiter OR "job opportunity" OR "software engineer" OR internship)',
