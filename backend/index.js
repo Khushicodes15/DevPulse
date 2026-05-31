@@ -23,7 +23,18 @@ const FRONTEND = process.env.FRONTEND_URL || 'http://localhost:5173';
 const isProd = process.env.NODE_ENV === 'production';
 
 app.use(cors({
-  origin: [FRONTEND, 'http://localhost:5173'],
+  origin: function(origin, callback) {
+    const allowed = [
+      FRONTEND,
+      'http://localhost:5173',
+      'https://dev-pulse-blush-three.vercel.app'
+    ];
+    if (!origin || allowed.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
