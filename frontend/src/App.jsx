@@ -113,6 +113,10 @@ function AuthGate({ children }) {
       if (window.location.pathname === '/') {
         navigate('/scanning', { replace: true })
       }
+    } else if (!user?.authenticated) {
+      if (window.location.pathname === '/dashboard' || window.location.pathname === '/scanning') {
+        navigate('/', { replace: true })
+      }
     }
   }, [user, authChecked, navigate, searchParams])
 
