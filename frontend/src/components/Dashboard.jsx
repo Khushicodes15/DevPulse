@@ -50,39 +50,30 @@ const tabComponents = {
   SCHEMA: Schema,
 }
 
+function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth)
+  useEffect(() => {
+    const handler = () => setWidth(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  return width
+}
+
 function ScoreBar({ label, value }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
       <span style={{
-        ...mono,
-        fontSize: '10px',
-        color: T.muted,
-        width: '100px',
-        letterSpacing: '0.05em',
-        textTransform: 'uppercase',
+        ...mono, fontSize: '10px', color: T.muted, width: '100px',
+        letterSpacing: '0.05em', textTransform: 'uppercase',
       }}>{label}</span>
-      <div style={{
-        flex: 1,
-        height: '3px',
-        background: T.elevated,
-        position: 'relative',
-      }}>
+      <div style={{ flex: 1, height: '3px', background: T.elevated, position: 'relative' }}>
         <div style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          height: '100%',
-          width: `${value}%`,
-          background: T.accent,
+          position: 'absolute', left: 0, top: 0, height: '100%',
+          width: `${value}%`, background: T.accent,
         }} />
       </div>
-      <span style={{
-        ...mono,
-        fontSize: '11px',
-        color: T.text,
-        width: '28px',
-        textAlign: 'right',
-      }}>{value}</span>
+      <span style={{ ...mono, fontSize: '11px', color: T.text, width: '28px', textAlign: 'right' }}>{value}</span>
     </div>
   )
 }
@@ -91,12 +82,18 @@ export default function Dashboard() {
   const { user, data } = useApp()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('OVERVIEW')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const width = useWindowWidth()
+  const isMobile = width < 768
 
   useEffect(() => {
-    if (!user?.authenticated) {
-      navigate('/', { replace: true })
-    }
+    if (!user?.authenticated) navigate('/', { replace: true })
   }, [user, navigate])
+
+  const handleTabSelect = (tab) => {
+    setActiveTab(tab)
+    if (isMobile) setSidebarOpen(false)
+  }
 
   const runData = data.run
   const score = runData?.score?.total ?? 0
@@ -107,201 +104,170 @@ export default function Dashboard() {
 
   const TabComponent = tabComponents[activeTab]
 
-  return (
-    <div style={{
-      height: '100vh',
-      display: 'flex',
-      background: T.bg,
-      overflow: 'hidden',
-    }}>
-      {/* Fixed sidebar */}
-      <div style={{
-        width: '260px',
-        minWidth: '260px',
-        height: '100vh',
-        borderRight: `1px solid ${T.border}`,
-        background: T.bg,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'auto',
-      }}>
-        {/* User section */}
-        <div style={{ padding: '24px 20px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-            <img
-              src={user?.user?.avatar || `https://github.com/${user?.user?.username || 'ghost'}.png`}
-              alt=""
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                border: `1px solid ${T.border}`,
-              }}
-            />
-            <div>
-              <div style={{
-                ...heading,
-                fontSize: '14px',
-                fontWeight: '700',
-                color: T.white,
-                lineHeight: '1.2',
-              }}>{user?.user?.displayName || user?.user?.username || 'DEV'}</div>
-              <div style={{
-                ...mono,
-                fontSize: '11px',
-                color: T.muted,
-              }}>@{user?.user?.username || 'unknown'}</div>
+  const sidebarContent = (
+    <>
+      <div style={{ padding: '24px 20px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+          <img
+            src={user?.user?.avatar || `https://github.com/${user?.user?.username || 'ghost'}.png`}
+            alt=""
+            style={{ width: '40px', height: '40px', borderRadius: '50%', border: `1px solid ${T.border}` }}
+          />
+          <div>
+            <div style={{ ...heading, fontSize: '14px', fontWeight: '700', color: T.white, lineHeight: '1.2' }}>
+              {user?.user?.displayName || user?.user?.username || 'DEV'}
+            </div>
+            <div style={{ ...mono, fontSize: '11px', color: T.muted }}>
+              @{user?.user?.username || 'unknown'}
             </div>
           </div>
-
-          {/* Gmail status — clickable if not connected */}
-          <div
-            onClick={() => { if (!user?.gmail) window.location.href = `${API}/auth/gmail/auth` }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: user?.gmail ? 'default' : 'pointer',
-            }}
-          >
-            <div style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: user?.gmail ? T.accent : T.red,
-            }} />
-            <span style={{
-              ...mono,
-              fontSize: '10px',
-              color: user?.gmail ? T.muted : T.accent,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              textDecoration: user?.gmail ? 'none' : 'underline',
-            }}>
-              {user?.gmail ? 'gmail connected' : '+ connect gmail'}
-            </span>
-          </div>
         </div>
-
-        <div style={{ height: '1px', background: T.border }} />
-
-        {/* Score section */}
-        <div style={{ padding: '20px' }}>
-          <div style={{
-            ...mono,
-            fontSize: '10px',
-            color: T.muted,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            marginBottom: '4px',
-          }}>HIREABILITY SCORE</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-            <span style={{
-              ...mono,
-              fontSize: '72px',
-              fontWeight: '600',
-              color: scoreColor,
-              lineHeight: '1',
-            }}>{score}</span>
-            <span style={{
-              ...mono,
-              fontSize: '24px',
-              color: T.muted,
-            }}>/100</span>
-          </div>
-          <div style={{
-            ...heading,
-            fontSize: '12px',
-            color: scoreColor,
-            fontWeight: '700',
-            marginTop: '6px',
-            letterSpacing: '0.1em',
-          }}>{verdict.toUpperCase()}</div>
-          {target && (
-            <div style={{
-              ...mono,
-              fontSize: '12px',
-              color: T.muted,
-              marginTop: '4px',
-            }}>{target}</div>
-          )}
-        </div>
-
-        <div style={{ height: '1px', background: T.border }} />
-
-        {/* Score breakdown */}
-        <div style={{ padding: '20px' }}>
-          <ScoreBar label="Consistency" value={breakdown.consistency ?? 0} />
-          <ScoreBar label="Project Q." value={breakdown.projectQuality ?? breakdown.project_quality ?? 0} />
-          <ScoreBar label="Activity" value={breakdown.activity ?? 0} />
-          <ScoreBar label="Diversity" value={breakdown.diversity ?? 0} />
-          <ScoreBar label="Collaboration" value={breakdown.collaboration ?? 0} />
-        </div>
-
-        <div style={{ height: '1px', background: T.border }} />
-
-        {/* Navigation tabs */}
-        <div style={{ padding: '12px 0' }}>
-          {TABS.map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                display: 'block',
-                width: '100%',
-                padding: '10px 20px',
-                textAlign: 'left',
-                ...heading,
-                fontSize: '12px',
-                fontWeight: '500',
-                color: activeTab === tab ? T.white : T.muted,
-                borderLeft: activeTab === tab ? `4px solid ${T.accent}` : '4px solid transparent',
-                background: 'transparent',
-                transition: 'none',
-                letterSpacing: '0.06em',
-              }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ height: '1px', background: T.border }} />
-
-        {/* Coral engine panel */}
-        <div style={{ padding: '16px 20px', marginTop: 'auto' }}>
-          <div style={{
-            ...mono,
-            fontSize: '10px',
-            color: T.text,
-            letterSpacing: '0.1em',
-            marginBottom: '8px',
-          }}>CORAL ENGINE</div>
-          <div style={{ height: '1px', background: T.border, marginBottom: '8px' }} />
-          <div style={{ ...mono, fontSize: '10px', color: T.muted, lineHeight: '2' }}>
-            <div>sql interface <span style={{ color: T.accent }}>✓</span></div>
-            <div>cross-source <span style={{ color: T.accent }}>✓</span></div>
-            <div>schema learning <span style={{ color: T.accent }}>✓</span></div>
-            <div>caching 5min <span style={{ color: T.accent }}>✓</span></div>
-            <div>mcp-stdio <span style={{ color: T.accent }}>✓</span></div>
-          </div>
-          <div style={{ height: '1px', background: T.border, margin: '8px 0' }} />
-          <div style={{ ...mono, fontSize: '10px', color: T.muted, lineHeight: '1.8' }}>
-            3 sources active<br />
-            <span style={{ color: T.accent }}>github</span> · <span style={{ color: T.accent }}>linear</span> · <span style={{ color: T.accent }}>sentry</span>
-          </div>
+        <div
+          onClick={() => { if (!user?.gmail) window.location.href = `${API}/auth/gmail/auth` }}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: user?.gmail ? 'default' : 'pointer' }}
+        >
+          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: user?.gmail ? T.accent : T.red }} />
+          <span style={{
+            ...mono, fontSize: '10px', color: user?.gmail ? T.muted : T.accent,
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+            textDecoration: user?.gmail ? 'none' : 'underline',
+          }}>
+            {user?.gmail ? 'gmail connected' : '+ connect gmail'}
+          </span>
         </div>
       </div>
 
-      {/* Main content area */}
-      <div style={{
-        flex: 1,
-        overflow: 'auto',
-        padding: '40px',
-      }}>
-        {TabComponent ? <TabComponent /> : (
-          <div style={{ color: T.muted, ...mono, fontSize: '12px' }}>Select a tab</div>
+      <div style={{ height: '1px', background: T.border }} />
+
+      <div style={{ padding: '20px' }}>
+        <div style={{ ...mono, fontSize: '10px', color: T.muted, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>
+          HIREABILITY SCORE
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+          <span style={{ ...mono, fontSize: '72px', fontWeight: '600', color: scoreColor, lineHeight: '1' }}>{score}</span>
+          <span style={{ ...mono, fontSize: '24px', color: T.muted }}>/100</span>
+        </div>
+        <div style={{ ...heading, fontSize: '12px', color: scoreColor, fontWeight: '700', marginTop: '6px', letterSpacing: '0.1em' }}>
+          {verdict.toUpperCase()}
+        </div>
+        {target && <div style={{ ...mono, fontSize: '12px', color: T.muted, marginTop: '4px' }}>{target}</div>}
+      </div>
+
+      <div style={{ height: '1px', background: T.border }} />
+
+      <div style={{ padding: '20px' }}>
+        <ScoreBar label="Consistency" value={breakdown.consistency ?? 0} />
+        <ScoreBar label="Project Q." value={breakdown.projectQuality ?? breakdown.project_quality ?? 0} />
+        <ScoreBar label="Activity" value={breakdown.activity ?? 0} />
+        <ScoreBar label="Diversity" value={breakdown.diversity ?? 0} />
+        <ScoreBar label="Collaboration" value={breakdown.collaboration ?? 0} />
+      </div>
+
+      <div style={{ height: '1px', background: T.border }} />
+
+      <div style={{ padding: '12px 0' }}>
+        {TABS.map(tab => (
+          <button
+            key={tab}
+            onClick={() => handleTabSelect(tab)}
+            style={{
+              display: 'block', width: '100%', padding: '10px 20px', textAlign: 'left',
+              ...heading, fontSize: '12px', fontWeight: '500',
+              color: activeTab === tab ? T.white : T.muted,
+              borderLeft: activeTab === tab ? `4px solid ${T.accent}` : '4px solid transparent',
+              background: 'transparent', transition: 'none', letterSpacing: '0.06em',
+            }}
+          >{tab}</button>
+        ))}
+      </div>
+
+      <div style={{ height: '1px', background: T.border }} />
+
+      <div style={{ padding: '16px 20px', marginTop: 'auto' }}>
+        <div style={{ ...mono, fontSize: '10px', color: T.text, letterSpacing: '0.1em', marginBottom: '8px' }}>CORAL ENGINE</div>
+        <div style={{ height: '1px', background: T.border, marginBottom: '8px' }} />
+        <div style={{ ...mono, fontSize: '10px', color: T.muted, lineHeight: '2' }}>
+          <div>sql interface <span style={{ color: T.accent }}>✓</span></div>
+          <div>cross-source <span style={{ color: T.accent }}>✓</span></div>
+          <div>schema learning <span style={{ color: T.accent }}>✓</span></div>
+          <div>caching 5min <span style={{ color: T.accent }}>✓</span></div>
+          <div>mcp-stdio <span style={{ color: T.accent }}>✓</span></div>
+        </div>
+        <div style={{ height: '1px', background: T.border, margin: '8px 0' }} />
+        <div style={{ ...mono, fontSize: '10px', color: T.muted, lineHeight: '1.8' }}>
+          3 sources active<br />
+          <span style={{ color: T.accent }}>github</span> · <span style={{ color: T.accent }}>linear</span> · <span style={{ color: T.accent }}>sentry</span>
+        </div>
+      </div>
+    </>
+  )
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: T.bg, overflow: 'hidden' }}>
+
+      {/* Mobile top bar — only shows on mobile */}
+      {isMobile && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 16px', borderBottom: `1px solid ${T.border}`,
+          background: T.bg, flexShrink: 0,
+        }}>
+          <div style={{ ...heading, fontSize: '16px', fontWeight: '800', color: T.white }}>DEVPULSE</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ ...mono, fontSize: '11px', color: scoreColor }}>{score}/100</div>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{
+                background: 'transparent', border: `1px solid ${T.border}`,
+                color: T.text, padding: '6px 10px', ...mono, fontSize: '11px',
+                letterSpacing: '0.05em', cursor: 'pointer',
+              }}
+            >
+              {sidebarOpen ? '✕ CLOSE' : '☰ MENU'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+
+        {/* Desktop sidebar — unchanged */}
+        {!isMobile && (
+          <div style={{
+            width: '260px', minWidth: '260px', height: '100%',
+            borderRight: `1px solid ${T.border}`, background: T.bg,
+            display: 'flex', flexDirection: 'column', overflow: 'auto',
+          }}>
+            {sidebarContent}
+          </div>
         )}
+
+        {/* Mobile slide-over */}
+        {isMobile && sidebarOpen && (
+          <>
+            <div
+              onClick={() => setSidebarOpen(false)}
+              style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10 }}
+            />
+            <div style={{
+              position: 'absolute', top: 0, left: 0, bottom: 0, width: '280px',
+              background: T.bg, borderRight: `1px solid ${T.border}`,
+              display: 'flex', flexDirection: 'column', overflow: 'auto', zIndex: 20,
+            }}>
+              {sidebarContent}
+            </div>
+          </>
+        )}
+
+        {/* Main content */}
+        <div style={{
+          flex: 1, overflow: 'auto',
+          padding: isMobile ? '20px 16px' : '40px',
+        }}>
+          {TabComponent ? <TabComponent /> : (
+            <div style={{ color: T.muted, ...mono, fontSize: '12px' }}>Select a tab</div>
+          )}
+        </div>
       </div>
     </div>
   )
