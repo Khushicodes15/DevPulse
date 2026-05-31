@@ -4,7 +4,7 @@ function runCoral(sql) {
   try {
     const coralCmd = process.env.CORAL_BIN || 'coral';
     const escaped = sql.replace(/"/g, '\\"').replace(/\n/g, ' ');
-    const result = execSync(`"${coralCmd}" sql --format json "${escaped}"`, {
+    const result = execSync(`${coralCmd} sql --format json "${escaped}"`, {
       timeout: 120000,
       env: { ...process.env, CORAL_CONFIG_DIR: process.env.CORAL_CONFIG_DIR }
     });
