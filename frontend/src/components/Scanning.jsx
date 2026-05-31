@@ -56,11 +56,11 @@ export default function Scanning() {
   }, [])
 
   useEffect(() => {
-    if (allDone && dataLoaded) {
+    if (allDone) {
       const t = setTimeout(() => navigate('/dashboard', { replace: true }), 800)
       return () => clearTimeout(t)
     }
-  }, [allDone, dataLoaded, navigate])
+  }, [allDone, navigate])
 
   useEffect(() => {
     if (user && !user.authenticated) navigate('/', { replace: true })
