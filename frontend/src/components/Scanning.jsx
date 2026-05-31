@@ -24,7 +24,7 @@ const scanSteps = [
 ]
 
 export default function Scanning() {
-  const { user, fetchAllData, fetchSchema, dataLoaded } = useApp()
+  const { user, fetchAllData, fetchSchema } = useApp()
   const navigate = useNavigate()
   const [steps, setSteps] = useState(scanSteps.map(s => ({ text: s, done: false })))
   const initRef = useRef(false)
@@ -37,6 +37,7 @@ export default function Scanning() {
     fetchAllData()
   }, [fetchAllData, fetchSchema])
 
+  // tick animation independently
   useEffect(() => {
     let stepIndex = 0
     const interval = setInterval(() => {
@@ -55,15 +56,25 @@ export default function Scanning() {
     return () => clearInterval(interval)
   }, [])
 
+  // navigate to dashboard when animation done — carry sid in URL
   useEffect(() => {
     if (allDone) {
-      const t = setTimeout(() => navigate('/dashboard', { replace: true }), 800)
+      const urlParams = new URLSearchParams(window.location.search)
+      const sid = urlParams.get('sid')
+      const t = setTimeout(() => {
+        navigate(sid ? `/dashboard?sid=${sid}` : '/dashboard', { replace: true })
+      }, 800)
       return () => clearTimeout(t)
     }
   }, [allDone, navigate])
 
+  // only redirect to landing if explicitly not authenticated AND no sid
   useEffect(() => {
-    if (user && !user.authenticated) navigate('/', { replace: true })
+    if (user !== null && !user.authenticated) {
+      const urlParams = new URLSearchParams(window.location.search)
+      const sid = urlParams.get('sid')
+      if (!sid) navigate('/', { replace: true })
+    }
   }, [user, navigate])
 
   return (
@@ -98,9 +109,9 @@ export default function Scanning() {
           ))}
         </div>
 
-        {allDone && !dataLoaded && (
+        {allDone && (
           <div style={{ ...mono, fontSize: '11px', color: T.muted, marginTop: '24px', letterSpacing: '0.06em' }}>
-            WAITING FOR AI ANALYSIS...
+            LOADING DASHBOARD...
           </div>
         )}
       </div>
