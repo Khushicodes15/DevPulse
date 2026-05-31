@@ -1,0 +1,16 @@
+﻿version = 1
+[workspaces.default.cache]
+enabled = true
+ttl_seconds = 300
+[workspaces.default.sources.github]
+variables = { GITHUB_API_BASE = "https://api.github.com" }
+secrets = ["GITHUB_TOKEN"]
+origin = "bundled"
+[workspaces.default.sources.linear]
+variables = {}
+secrets = ["LINEAR_API_KEY"]
+origin = "bundled"
+[workspaces.default.sources.sentry]
+variables = { SENTRY_ORG = "khushi-dhona" }
+secrets = ["SENTRY_TOKEN"]
+origin = "bundled"
