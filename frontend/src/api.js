@@ -1,1 +1,1 @@
-export const API = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+﻿export const API = 'https://devpulse-6wp1.onrender.com'
