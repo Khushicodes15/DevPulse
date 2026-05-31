@@ -4,6 +4,7 @@ const axios = require('axios');
 const { runCoralMultiple, runCoral } = require('../coral');
 const { calculateHireabilityScore } = require('../scoring');
 const { mcpQueryMultiple } = require('../coral-mcp');
+
 async function askAI(prompt) {
   const res = await axios.post(
     'https://integrate.api.nvidia.com/v1/chat/completions',
@@ -18,17 +19,17 @@ async function askAI(prompt) {
         Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      timeout: 60000
+      timeout: 120000
     }
   );
   return res.data.choices[0].message.content;
 }
 
 // Get the most recently pushed REAL repo (not profile readme)
-function getRealRepo(repos) {
+function getRealRepo(repos, username) {
   if (!repos || repos.length === 0) return null;
   const real = repos.find(r =>
-    r.name !== 'Khushicodes15' &&
+    r.name !== username &&
     !r.name.toLowerCase().includes('profile') &&
     !r.name.toLowerCase().includes('readme')
   );
@@ -48,7 +49,7 @@ async function runAnalysis(req, res) {
       `SELECT name, description, language, stargazers_count, forks_count, open_issues_count, pushed_at, created_at FROM github.user_repos LIMIT 30`
     );
     const repos = reposResult.data || [];
-    const repoName = getRealRepo(repos) || 'BrainLoop';
+    const repoName = getRealRepo(repos, username) || repos[0]?.name || 'main';
     console.log(`  Using repo: ${repoName}`);
 
     // ── Step 2: Query all other sources in parallel ──────────────────
@@ -213,6 +214,7 @@ Return ONLY JSON, no markdown, no backticks:
     res.status(500).json({ error: err.message });
   }
 });
+
 // GET /api/analyze/growth  ← "How am I growing?"
 router.get('/growth', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
@@ -227,7 +229,6 @@ router.get('/growth', async (req, res) => {
     const repos = data.repoTimeline?.data || [];
     const events = data.events?.data || [];
 
-    // Build month-by-month repo creation timeline
     const monthlyCreation = {};
     repos.forEach(r => {
       if (!r.created_at) return;
@@ -235,13 +236,11 @@ router.get('/growth', async (req, res) => {
       monthlyCreation[month] = (monthlyCreation[month] || 0) + 1;
     });
 
-    // Event type breakdown
     const eventBreakdown = {};
     events.forEach(e => {
       eventBreakdown[e.type] = (eventBreakdown[e.type] || 0) + 1;
     });
 
-    // Language progression over time
     const languageTimeline = repos.map(r => ({
       name: r.name,
       language: r.language,
@@ -299,7 +298,6 @@ router.get('/portfolio', async (req, res) => {
 
     const repos = data.allRepos?.data || [];
 
-    // Categorise repos by likely type
     const categories = {
       projects: repos.filter(r => r.description && r.language && r.stargazers_count >= 0),
       experiments: repos.filter(r => !r.description && r.language),
@@ -371,12 +369,10 @@ router.get('/week', async (req, res) => {
     const events = data.recentEvents?.data || [];
     const repos = data.recentRepos?.data || [];
 
-    // Filter last 7 days
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const weekEvents = events.filter(e => e.created_at && new Date(e.created_at) >= sevenDaysAgo);
     const weekRepos = repos.filter(r => r.pushed_at && new Date(r.pushed_at) >= sevenDaysAgo);
 
-    // Event type counts for the week
     const weekActivity = {};
     weekEvents.forEach(e => {
       weekActivity[e.type] = (weekActivity[e.type] || 0) + 1;
@@ -421,6 +417,7 @@ Write a personal, direct weekly summary. Return ONLY valid JSON, no markdown, no
     res.status(500).json({ error: err.message });
   }
 });
+
 // GET /api/analyze/schema  ← schema learning (shows coral catalog awareness)
 router.get('/schema', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
@@ -433,7 +430,6 @@ router.get('/schema', async (req, res) => {
       sentryColumns: `SELECT table_name, column_name, data_type, description FROM coral.columns WHERE schema_name = 'sentry' ORDER BY table_name`
     });
 
-    // Group tables by schema
     const schemaMap = {};
     (data.tables?.data || []).forEach(t => {
       if (!schemaMap[t.schema_name]) schemaMap[t.schema_name] = [];
@@ -454,6 +450,7 @@ router.get('/schema', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 // GET /api/analyze/mcp-insight  ← uses Coral via MCP protocol (not CLI)
 router.get('/mcp-insight', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
@@ -462,7 +459,6 @@ router.get('/mcp-insight', async (req, res) => {
     const username = req.user.username;
     console.log('\n  Running MCP-powered cross-source analysis...');
 
-    // These queries go through Coral MCP server, not CLI
     const data = await mcpQueryMultiple({
       githubRepos: `SELECT name, language, stargazers_count, pushed_at FROM github.user_repos ORDER BY pushed_at DESC LIMIT 10`,
       githubProfile: `SELECT login, public_repos, followers FROM github.user LIMIT 1`,
@@ -470,7 +466,6 @@ router.get('/mcp-insight', async (req, res) => {
       sentryIssues: `SELECT title, level, count, first_seen, last_seen FROM sentry.issues LIMIT 10`
     });
 
-    // Cross-source intelligence — something only possible with Coral joins
     const prompt = `You are DevPulse. You have access to a developer's data across GitHub, Linear, and Sentry via Coral MCP.
 
 GITHUB REPOS (via MCP):
@@ -488,7 +483,6 @@ ${JSON.stringify(data.sentryIssues?.data || [], null, 2)}
 This data was fetched via Coral's MCP server doing cross-source joins across GitHub + Linear + Sentry simultaneously.
 
 Give a single cross-source insight that would be IMPOSSIBLE to derive from any one source alone.
-For example: correlate repo activity with open issues, or error frequency with task backlog.
 
 Return ONLY valid JSON, no markdown, no backticks:
 {
@@ -523,4 +517,5 @@ Return ONLY valid JSON, no markdown, no backticks:
     res.status(500).json({ error: err.message });
   }
 });
+
 module.exports = router;
