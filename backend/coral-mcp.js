@@ -6,6 +6,8 @@ let mcpClient = null;
 async function getMcpClient() {
   if (mcpClient) return mcpClient;
 
+  // On Railway: CORAL_BIN=/app/coral (single binary, no spaces)
+  // Locally on Windows: falls back to wsl command
   const coralBin = process.env.CORAL_BIN || 'wsl -d Ubuntu -e env CORAL_CONFIG_DIR=/home/user/cassandra-hackathon /home/user/.local/bin/coral';
   const parts = coralBin.split(' ');
   const command = parts[0];
@@ -14,7 +16,10 @@ async function getMcpClient() {
   const transport = new StdioClientTransport({
     command,
     args,
-    env: { ...process.env }
+    env: {
+      ...process.env,
+      CORAL_CONFIG_DIR: process.env.CORAL_CONFIG_DIR,
+    }
   });
 
   mcpClient = new Client(
@@ -22,12 +27,11 @@ async function getMcpClient() {
     { capabilities: {} }
   );
 
-    await mcpClient.connect(transport);
+  await mcpClient.connect(transport);
 
-    // Discover available tools
-    const toolList = await mcpClient.listTools();
-    console.log('  Coral MCP client connected');
-    console.log('  Available MCP tools:', JSON.stringify(toolList.tools.map(t => t.name)));
+  const toolList = await mcpClient.listTools();
+  console.log('  Coral MCP client connected');
+  console.log('  Available MCP tools:', JSON.stringify(toolList.tools.map(t => t.name)));
   return mcpClient;
 }
 
@@ -35,10 +39,9 @@ async function mcpQuery(sql) {
   try {
     const client = await getMcpClient();
     const result = await client.callTool({
-    name: 'sql',
-    arguments: { sql }
+      name: 'sql',
+      arguments: { sql }
     });
-
     const text = result.content?.[0]?.text || '[]';
     return { success: true, data: JSON.parse(text) };
   } catch (err) {
