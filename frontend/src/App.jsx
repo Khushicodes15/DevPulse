@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { API } from './api'
@@ -7,17 +7,15 @@ import Landing from './components/Landing'
 import Scanning from './components/Scanning'
 import Dashboard from './components/Dashboard'
 
+// Store sid globally so all requests can use it
+let globalSid = null
+
 function AppProvider({ children }) {
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [data, setData] = useState({
-    run: null,
-    focus: null,
-    growth: null,
-    portfolio: null,
-    week: null,
-    mcpInsight: null,
-    schema: null,
+    run: null, focus: null, growth: null,
+    portfolio: null, week: null, mcpInsight: null, schema: null,
   })
   const [loading, setLoading] = useState({})
   const [errors, setErrors] = useState({})
@@ -25,7 +23,13 @@ function AppProvider({ children }) {
 
   const checkAuth = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/api/me`, { withCredentials: true })
+      // pick up sid from URL if present
+      const urlParams = new URLSearchParams(window.location.search)
+      const sid = urlParams.get('sid')
+      if (sid) globalSid = sid
+
+      const url = globalSid ? `${API}/api/me?sid=${globalSid}` : `${API}/api/me`
+      const res = await axios.get(url, { withCredentials: true })
       setUser(res.data)
       return res.data
     } catch {
@@ -40,7 +44,9 @@ function AppProvider({ children }) {
     setLoading(prev => ({ ...prev, [key]: true }))
     setErrors(prev => ({ ...prev, [key]: null }))
     try {
-      const res = await axios.get(`${API}${path}`, { withCredentials: true })
+      const sep = path.includes('?') ? '&' : '?'
+      const fullPath = globalSid ? `${path}${sep}sid=${globalSid}` : path
+      const res = await axios.get(`${API}${fullPath}`, { withCredentials: true })
       setData(prev => ({ ...prev, [key]: res.data }))
       return res.data
     } catch (e) {
@@ -64,14 +70,15 @@ function AppProvider({ children }) {
     const results = await Promise.all(
       endpoints.map(([key, path]) => fetchEndpoint(key, path))
     )
-    // succeed if at least one endpoint returned data
     setDataLoaded(results.some(r => r !== null))
     return results
   }, [fetchEndpoint])
 
   const fetchSchema = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/api/analyze/schema`, { withCredentials: true })
+      const sep = '?'
+      const fullPath = globalSid ? `/api/analyze/schema${sep}sid=${globalSid}` : '/api/analyze/schema'
+      const res = await axios.get(`${API}${fullPath}`, { withCredentials: true })
       setData(prev => ({ ...prev, schema: res.data }))
       return res.data
     } catch (e) {
@@ -81,21 +88,16 @@ function AppProvider({ children }) {
   }, [])
 
   useEffect(() => {
+    // grab sid from URL immediately on mount
+    const urlParams = new URLSearchParams(window.location.search)
+    const sid = urlParams.get('sid')
+    if (sid) globalSid = sid
     checkAuth()
   }, [checkAuth])
 
   const value = {
-    user,
-    authChecked,
-    data,
-    loading,
-    errors,
-    dataLoaded,
-    checkAuth,
-    fetchAllData,
-    fetchEndpoint,
-    fetchSchema,
-    API,
+    user, authChecked, data, loading, errors, dataLoaded,
+    checkAuth, fetchAllData, fetchEndpoint, fetchSchema, API,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
@@ -108,13 +110,15 @@ function AuthGate({ children }) {
 
   useEffect(() => {
     if (!authChecked) return
-    // only need github auth to proceed — gmail is optional
     if (user?.authenticated) {
       if (window.location.pathname === '/') {
         navigate('/scanning', { replace: true })
       }
-    } else if (!user?.authenticated) {
-      if (window.location.pathname === '/dashboard' || window.location.pathname === '/scanning') {
+    } else {
+      // only redirect to landing if explicitly not authenticated
+      // and not on a page with a sid param (mid-auth flow)
+      const sid = searchParams.get('sid')
+      if (!sid && (window.location.pathname === '/dashboard' || window.location.pathname === '/scanning')) {
         navigate('/', { replace: true })
       }
     }
@@ -123,17 +127,13 @@ function AuthGate({ children }) {
   if (!authChecked) {
     return (
       <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        height: '100vh', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
         background: '#0c0c0e',
       }}>
         <div style={{
           fontFamily: "'JetBrains Mono', monospace",
-          fontSize: '12px',
-          color: '#888896',
-          letterSpacing: '0.1em',
+          fontSize: '12px', color: '#888896', letterSpacing: '0.1em',
         }}>INITIALIZING...</div>
       </div>
     )

@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 
-// ── OAuth Env Verification ────────────────────────────────────────────────────
 console.log('\n[ENV] OAuth Configuration Check:');
 console.log(`[ENV]   GOOGLE_CLIENT_ID exists: ${!!process.env.GOOGLE_CLIENT_ID}`);
 console.log(`[ENV]   GOOGLE_CLIENT_SECRET exists: ${!!process.env.GOOGLE_CLIENT_SECRET}`);
@@ -9,6 +8,7 @@ console.log(`[ENV]   GOOGLE_CALLBACK_URL exists: ${!!process.env.GOOGLE_CALLBACK
 console.log(`[ENV]   GITHUB_CLIENT_ID exists: ${!!process.env.GITHUB_CLIENT_ID}`);
 console.log(`[ENV]   GITHUB_CLIENT_SECRET exists: ${!!process.env.GITHUB_CLIENT_SECRET}`);
 console.log(`[ENV]   GITHUB_CALLBACK_URL exists: ${!!process.env.GITHUB_CALLBACK_URL}\n`);
+
 const cors = require('cors');
 const session = require('express-session');
 const passport = require('./auth/github');
@@ -19,20 +19,42 @@ const analyzeRoutes = require('./routes/analyze');
 
 const app = express();
 
-// ── Middleware ────────────────────────────────────────────────────────────────
+const FRONTEND = process.env.FRONTEND_URL || 'http://localhost:5173';
+const isProd = process.env.NODE_ENV === 'production';
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: [FRONTEND, 'http://localhost:5173'],
   credentials: true
 }));
 app.use(express.json());
+
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'devpulse_secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: true, sameSite: 'none', maxAge: 24 * 60 * 60 * 1000 }
+  cookie: {
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000
+  }
 }));
+
 app.use(passport.initialize());
 app.use(passport.session());
+
+// ── Inject user from sid BEFORE all routes ────────────────────────────────────
+app.use((req, res, next) => {
+  if (req.user) return next();
+  const sid = req.query.sid || req.headers['x-session-id'];
+  if (!sid) return next();
+  req.sessionStore.get(sid, (err, sessionData) => {
+    if (err || !sessionData?.passport?.user) return next();
+    req.user = sessionData.passport.user;
+    req.session.googleTokens = sessionData.googleTokens;
+    req.session.googleProfile = sessionData.googleProfile;
+    next();
+  });
+});
 
 // ── Auth Routes ───────────────────────────────────────────────────────────────
 app.get('/auth/github',
@@ -40,15 +62,13 @@ app.get('/auth/github',
 );
 
 app.get('/auth/github/callback',
-  passport.authenticate('github', { failureRedirect: 'http://localhost:5173?error=github_failed' }),
+  passport.authenticate('github', { failureRedirect: `${FRONTEND}?error=github_failed` }),
   (req, res) => {
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/scanning`);
+    res.redirect(`${FRONTEND}/scanning?sid=${req.sessionID}`);
   }
 );
 
-app.get('/auth/google', (req, res) => {
-  res.redirect('/auth/gmail');
-});
+app.get('/auth/google', (req, res) => res.redirect('/auth/gmail'));
 
 app.get('/auth/logout', (req, res) => {
   req.logout(() => {
@@ -86,7 +106,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`\n DevPulse backend running on port ${PORT}`);
@@ -94,5 +113,5 @@ app.listen(PORT, () => {
   console.log(` GitHub:   http://localhost:${PORT}/auth/github`);
   console.log(` Gmail:    http://localhost:${PORT}/auth/gmail/auth\n`);
 });
-// Pre-warm MCP connection
+
 getMcpClient().catch(err => console.error('MCP pre-warm failed:', err.message));
