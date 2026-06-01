@@ -46,7 +46,7 @@ async function runAnalysis(req, res) {
     // ── Step 1: Get repos first to find real repo name ───────────────
     console.log(' Step 1: Querying GitHub via Coral...');
     const reposResult = runCoral(
-      `SELECT name, description, language, stargazers_count, forks_count, open_issues_count, pushed_at, created_at FROM github.user_repos LIMIT 30`
+      `SELECT name, description, language, stargazers_count, forks_count, open_issues_count, pushed_at, created_at FROM github.user_repos LIMIT 30`,req.user.accessToken
     );
     const repos = reposResult.data || [];
     const repoName = getRealRepo(repos, username) || repos[0]?.name || 'main';
@@ -59,7 +59,7 @@ async function runAnalysis(req, res) {
       prs: `SELECT title, state, created_at, merged_at FROM github.pulls WHERE owner = '${username}' AND repo = '${repoName}' LIMIT 20`,
       commitActivity: `SELECT week, total, days FROM github.commit_activity WHERE owner = '${username}' AND repo = '${repoName}' LIMIT 20`,
       events: `SELECT type, created_at FROM github.user_event_public WHERE username = '${username}' LIMIT 30`
-    });
+    },req.user.accessToken);
 
     // Attach repos to githubData
     githubData.repos = reposResult;
@@ -78,7 +78,7 @@ async function runAnalysis(req, res) {
       repoHealth: `SELECT name, language, stargazers_count, open_issues_count, pushed_at, forks_count FROM github.user_repos ORDER BY pushed_at DESC LIMIT 10`,
       topRepos: `SELECT name, stargazers_count, forks_count, language, description FROM github.user_repos ORDER BY stargazers_count DESC LIMIT 5`,
       recentEvents: `SELECT type, created_at FROM github.user_event_public WHERE username = '${username}' LIMIT 20`
-    });
+    },req.user.accessToken);
 
     // ── Step 6: AI gap analysis ──────────────────────────────────────
     console.log(' Step 5: Running AI gap analysis...');
@@ -191,7 +191,7 @@ router.get('/focus', async (req, res) => {
     const data = runCoralMultiple({
       recentRepos: `SELECT name, open_issues_count, pushed_at FROM github.user_repos ORDER BY pushed_at DESC LIMIT 5`,
       topRepos: `SELECT name, stargazers_count, language FROM github.user_repos ORDER BY stargazers_count DESC LIMIT 5`
-    });
+    },req.user.accessToken);
 
     const prompt = `Based on this GitHub activity data, what ONE thing should this developer work on today?
 
@@ -224,7 +224,7 @@ router.get('/growth', async (req, res) => {
     const data = runCoralMultiple({
       repoTimeline: `SELECT name, language, created_at, pushed_at, stargazers_count FROM github.user_repos ORDER BY created_at ASC`,
       events: `SELECT type, created_at FROM github.user_event_public WHERE username = '${username}' LIMIT 50`
-    });
+    }, req.user.accessToken);
 
     const repos = data.repoTimeline?.data || [];
     const events = data.events?.data || [];
@@ -294,7 +294,7 @@ router.get('/portfolio', async (req, res) => {
     const data = runCoralMultiple({
       allRepos: `SELECT name, description, language, stargazers_count, forks_count, open_issues_count, pushed_at, created_at FROM github.user_repos ORDER BY pushed_at DESC`,
       topByStars: `SELECT name, stargazers_count, forks_count, language, description FROM github.user_repos ORDER BY stargazers_count DESC LIMIT 10`
-    });
+    }, req.user.accessToken);
 
     const repos = data.allRepos?.data || [];
 
@@ -364,7 +364,7 @@ router.get('/week', async (req, res) => {
     const data = runCoralMultiple({
       recentEvents: `SELECT type, created_at FROM github.user_event_public WHERE username = '${username}' LIMIT 50`,
       recentRepos: `SELECT name, language, pushed_at, open_issues_count FROM github.user_repos ORDER BY pushed_at DESC LIMIT 10`
-    });
+    }, req.user.accessToken);
 
     const events = data.recentEvents?.data || [];
     const repos = data.recentRepos?.data || [];
@@ -428,7 +428,7 @@ router.get('/schema', async (req, res) => {
       githubColumns: `SELECT table_name, column_name, data_type, description FROM coral.columns WHERE schema_name = 'github' ORDER BY table_name LIMIT 50`,
       linearColumns: `SELECT table_name, column_name, data_type, description FROM coral.columns WHERE schema_name = 'linear' ORDER BY table_name`,
       sentryColumns: `SELECT table_name, column_name, data_type, description FROM coral.columns WHERE schema_name = 'sentry' ORDER BY table_name`
-    });
+    }, req.user.accessToken);
 
     const schemaMap = {};
     (data.tables?.data || []).forEach(t => {
