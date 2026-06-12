@@ -54,10 +54,11 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ── Inject user from sid BEFORE all routes ────────────────────────────────────
+// sid always takes priority over any cookie-based session so different users
+// on the same browser don't bleed into each other's sessions.
 app.use((req, res, next) => {
-  if (req.user) return next();
   const sid = req.query.sid || req.headers['x-session-id'];
-  if (!sid) return next();
+  if (!sid) return next(); // no sid → rely on passport.session() cookie as-is
   req.sessionStore.get(sid, (err, sessionData) => {
     if (err || !sessionData?.passport?.user) return next();
     req.user = sessionData.passport.user;

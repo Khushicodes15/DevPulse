@@ -459,12 +459,14 @@ router.get('/mcp-insight', async (req, res) => {
     const username = req.user.username;
     console.log('\n  Running MCP-powered cross-source analysis...');
 
-    const data = await mcpQueryMultiple({
+    // Use runCoralMultiple (not the MCP singleton) so each request gets the
+    // correct per-user GITHUB_TOKEN injected via env.
+    const data = runCoralMultiple({
       githubRepos: `SELECT name, language, stargazers_count, pushed_at FROM github.user_repos ORDER BY pushed_at DESC LIMIT 10`,
       githubProfile: `SELECT login, public_repos, followers FROM github.user LIMIT 1`,
       linearIssues: `SELECT title, state_name, priority_label, created_at FROM linear.issues LIMIT 10`,
       sentryIssues: `SELECT title, level, count, first_seen, last_seen FROM sentry.issues LIMIT 10`
-    });
+    }, req.user.accessToken);
 
     const prompt = `You are DevPulse. You have access to a developer's data across GitHub, Linear, and Sentry via Coral MCP.
 
@@ -504,7 +506,7 @@ Return ONLY valid JSON, no markdown, no backticks:
         linear: data.linearIssues?.data,
         sentry: data.sentryIssues?.data
       },
-      transport: 'coral-mcp-stdio',
+      transport: 'coral-cli',
       meta: {
         queriedAt: new Date().toISOString(),
         username,

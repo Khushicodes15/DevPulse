@@ -1,6 +1,6 @@
 ﻿version = 1
 [workspaces.default.cache]
-enabled = true
+enabled = false
 ttl_seconds = 300
 [workspaces.default.sources.github]
 variables = { GITHUB_API_BASE = "https://api.github.com" }
