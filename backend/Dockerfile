@@ -7,7 +7,10 @@ RUN apt-get update && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://withcoral.com/install.sh | sh
+RUN mkdir -p /root/.local/bin && \
+    curl -fsSL -L https://github.com/withcoral/coral/releases/download/v0.2.0/coral-x86_64-unknown-linux-gnu.tar.gz \
+    | tar -xz -C /root/.local/bin && \
+    chmod +x /root/.local/bin/coral
 
 COPY package*.json ./
 RUN npm install --production
