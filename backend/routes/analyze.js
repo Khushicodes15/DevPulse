@@ -130,10 +130,24 @@ Return ONLY valid JSON, no markdown, no backticks:
   "growthTrend": "improving|declining|stagnant"
 }`;
 
-    const aiRaw = await askAI(prompt);
-    const aiMatch = aiRaw.match(/\{[\s\S]*\}/);
-    if (!aiMatch) throw new Error('AI did not return valid JSON');
-    const aiInsights = JSON.parse(aiMatch[0]);
+    let aiInsights;
+    try {
+      const aiRaw = await askAI(prompt);
+      const aiMatch = aiRaw.match(/\{[\s\S]*\}/);
+      if (!aiMatch) throw new Error('AI did not return valid JSON');
+      aiInsights = JSON.parse(aiMatch[0]);
+    } catch (aiErr) {
+      console.error(' AI analysis failed (non-fatal):', aiErr.message);
+      aiInsights = {
+        summary: 'AI analysis temporarily unavailable — score and GitHub data are accurate.',
+        weeklyActions: [],
+        realisticTargets: '',
+        strengthSpotlight: '',
+        biggestBlocker: '',
+        focusToday: '',
+        growthTrend: 'stagnant'
+      };
+    }
 
     console.log(` Analysis complete. Score: ${scoreResult.total}/100`);
 
