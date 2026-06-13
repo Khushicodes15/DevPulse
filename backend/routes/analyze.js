@@ -5,24 +5,33 @@ const { runCoralMultiple, runCoral } = require('../coral');
 const { calculateHireabilityScore } = require('../scoring');
 const { mcpQueryMultiple } = require('../coral-mcp');
 
-async function askAI(prompt) {
-  const res = await axios.post(
-    'https://integrate.api.nvidia.com/v1/chat/completions',
-    {
-      model: 'meta/llama-3.1-8b-instruct',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 500
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 120000
+async function askAI(prompt, retries = 2) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await axios.post(
+        'https://integrate.api.nvidia.com/v1/chat/completions',
+        {
+          model: 'meta/llama-3.1-8b-instruct',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.7,
+          max_tokens: 500
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
+            'Content-Type': 'application/json',
+            'Connection': 'close'
+          },
+          timeout: 120000
+        }
+      );
+      return res.data.choices[0].message.content;
+    } catch (err) {
+      if (attempt === retries) throw err;
+      console.warn(` AI attempt ${attempt} failed (${err.message}), retrying in ${attempt * 2}s...`);
+      await new Promise(r => setTimeout(r, attempt * 2000));
     }
-  );
-  return res.data.choices[0].message.content;
+  }
 }
 
 // Get the most recently pushed REAL repo (not profile readme)
