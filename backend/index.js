@@ -60,7 +60,7 @@ app.use((req, res, next) => {
   const sid = req.query.sid || req.headers['x-session-id'];
   if (!sid) return next(); // no sid → rely on passport.session() cookie as-is
   req.sessionStore.get(sid, (err, sessionData) => {
-    if (err || !sessionData?.passport?.user) return next();
+    if (err || !sessionData?.passport?.user) { req.user = null; return next(); }
     req.user = sessionData.passport.user;
     req.session.googleTokens = sessionData.googleTokens;
     req.session.googleProfile = sessionData.googleProfile;
