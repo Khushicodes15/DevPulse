@@ -51,11 +51,12 @@ async function runAnalysis(req, res) {
   try {
     const username = req.user.username;
     console.log(`\n Analyzing profile for: ${username}`);
+    console.log(` Token: ...${req.user.accessToken?.slice(-6) || 'MISSING'} hasToken=${!!req.user.accessToken}`);
 
     // ── Step 1: Get repos first to find real repo name ───────────────
     console.log(' Step 1: Querying GitHub via Coral...');
     const reposResult = runCoral(
-      `SELECT name, description, language, stargazers_count, forks_count, open_issues_count, pushed_at, created_at FROM github.user_repos LIMIT 30`,req.user.accessToken
+      `SELECT name, description, language, stargazers_count, forks_count, open_issues_count, pushed_at, created_at FROM github.user_repos WHERE owner = '${username}' LIMIT 30`,req.user.accessToken
     );
     const repos = reposResult.data || [];
     const repoName = getRealRepo(repos, username) || repos[0]?.name || 'main';
@@ -64,7 +65,7 @@ async function runAnalysis(req, res) {
     // ── Step 2: Query all other sources in parallel ──────────────────
     const githubData = runCoralMultiple({
       profile: `SELECT login, name, bio, followers, following, public_repos, created_at FROM github.user LIMIT 1`,
-      languages: `SELECT language, COUNT(*) as repo_count FROM github.user_repos WHERE language IS NOT NULL GROUP BY language ORDER BY repo_count DESC`,
+      languages: `SELECT language, COUNT(*) as repo_count FROM github.user_repos WHERE owner = '${username}' AND language IS NOT NULL GROUP BY language ORDER BY repo_count DESC`,
       prs: `SELECT title, state, created_at, merged_at FROM github.pulls WHERE owner = '${username}' AND repo = '${repoName}' LIMIT 20`,
       commitActivity: `SELECT week, total, days FROM github.commit_activity WHERE owner = '${username}' AND repo = '${repoName}' LIMIT 20`,
       events: `SELECT type, created_at FROM github.user_event_public WHERE username = '${username}' LIMIT 30`
@@ -84,8 +85,8 @@ async function runAnalysis(req, res) {
     // ── Step 5: Cross-source Coral JOIN ──────────────────────────────
     console.log(' Step 4: Running cross-source Coral JOIN...');
     const crossSourceData = runCoralMultiple({
-      repoHealth: `SELECT name, language, stargazers_count, open_issues_count, pushed_at, forks_count FROM github.user_repos ORDER BY pushed_at DESC LIMIT 10`,
-      topRepos: `SELECT name, stargazers_count, forks_count, language, description FROM github.user_repos ORDER BY stargazers_count DESC LIMIT 5`,
+      repoHealth: `SELECT name, language, stargazers_count, open_issues_count, pushed_at, forks_count FROM github.user_repos WHERE owner = '${username}' ORDER BY pushed_at DESC LIMIT 10`,
+      topRepos: `SELECT name, stargazers_count, forks_count, language, description FROM github.user_repos WHERE owner = '${username}' ORDER BY stargazers_count DESC LIMIT 5`,
       recentEvents: `SELECT type, created_at FROM github.user_event_public WHERE username = '${username}' LIMIT 20`
     },req.user.accessToken);
 
@@ -211,9 +212,10 @@ router.get('/focus', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
+    const username = req.user.username;
     const data = runCoralMultiple({
-      recentRepos: `SELECT name, open_issues_count, pushed_at FROM github.user_repos ORDER BY pushed_at DESC LIMIT 5`,
-      topRepos: `SELECT name, stargazers_count, language FROM github.user_repos ORDER BY stargazers_count DESC LIMIT 5`
+      recentRepos: `SELECT name, open_issues_count, pushed_at FROM github.user_repos WHERE owner = '${username}' ORDER BY pushed_at DESC LIMIT 5`,
+      topRepos: `SELECT name, stargazers_count, language FROM github.user_repos WHERE owner = '${username}' ORDER BY stargazers_count DESC LIMIT 5`
     },req.user.accessToken);
 
     const prompt = `Based on this GitHub activity data, what ONE thing should this developer work on today?
@@ -245,7 +247,7 @@ router.get('/growth', async (req, res) => {
   try {
     const username = req.user.username;
     const data = runCoralMultiple({
-      repoTimeline: `SELECT name, language, created_at, pushed_at, stargazers_count FROM github.user_repos ORDER BY created_at ASC`,
+      repoTimeline: `SELECT name, language, created_at, pushed_at, stargazers_count FROM github.user_repos WHERE owner = '${username}' ORDER BY created_at ASC`,
       events: `SELECT type, created_at FROM github.user_event_public WHERE username = '${username}' LIMIT 50`
     }, req.user.accessToken);
 
@@ -314,9 +316,10 @@ router.get('/portfolio', async (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
 
   try {
+    const username = req.user.username;
     const data = runCoralMultiple({
-      allRepos: `SELECT name, description, language, stargazers_count, forks_count, open_issues_count, pushed_at, created_at FROM github.user_repos ORDER BY pushed_at DESC`,
-      topByStars: `SELECT name, stargazers_count, forks_count, language, description FROM github.user_repos ORDER BY stargazers_count DESC LIMIT 10`
+      allRepos: `SELECT name, description, language, stargazers_count, forks_count, open_issues_count, pushed_at, created_at FROM github.user_repos WHERE owner = '${username}' ORDER BY pushed_at DESC`,
+      topByStars: `SELECT name, stargazers_count, forks_count, language, description FROM github.user_repos WHERE owner = '${username}' ORDER BY stargazers_count DESC LIMIT 10`
     }, req.user.accessToken);
 
     const repos = data.allRepos?.data || [];
@@ -386,7 +389,7 @@ router.get('/week', async (req, res) => {
     const username = req.user.username;
     const data = runCoralMultiple({
       recentEvents: `SELECT type, created_at FROM github.user_event_public WHERE username = '${username}' LIMIT 50`,
-      recentRepos: `SELECT name, language, pushed_at, open_issues_count FROM github.user_repos ORDER BY pushed_at DESC LIMIT 10`
+      recentRepos: `SELECT name, language, pushed_at, open_issues_count FROM github.user_repos WHERE owner = '${username}' ORDER BY pushed_at DESC LIMIT 10`
     }, req.user.accessToken);
 
     const events = data.recentEvents?.data || [];
@@ -485,7 +488,7 @@ router.get('/mcp-insight', async (req, res) => {
     // Use runCoralMultiple (not the MCP singleton) so each request gets the
     // correct per-user GITHUB_TOKEN injected via env.
     const data = runCoralMultiple({
-      githubRepos: `SELECT name, language, stargazers_count, pushed_at FROM github.user_repos ORDER BY pushed_at DESC LIMIT 10`,
+      githubRepos: `SELECT name, language, stargazers_count, pushed_at FROM github.user_repos WHERE owner = '${username}' ORDER BY pushed_at DESC LIMIT 10`,
       githubProfile: `SELECT login, public_repos, followers FROM github.user LIMIT 1`,
       linearIssues: `SELECT title, state_name, priority_label, created_at FROM linear.issues LIMIT 10`,
       sentryIssues: `SELECT title, level, count, first_seen, last_seen FROM sentry.issues LIMIT 10`
