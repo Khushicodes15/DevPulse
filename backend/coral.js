@@ -3,7 +3,11 @@ const { execSync } = require('child_process');
 function runCoral(sql, githubToken) {
   try {
     const coralCmd = process.env.CORAL_BIN || 'coral';
-    const escaped = sql.replace(/"/g, '\\"').replace(/\n/g, ' ');
+    // Append a per-user comment so Coral's query cache is keyed per user,
+    // preventing cached results from one user leaking to another.
+    const userTag = githubToken ? githubToken.slice(-10) : 'anon';
+    const taggedSql = `${sql} -- u:${userTag}`;
+    const escaped = taggedSql.replace(/"/g, '\\"').replace(/\n/g, ' ');
     const env = {
       ...process.env,
       CORAL_CONFIG_DIR: process.env.CORAL_CONFIG_DIR
