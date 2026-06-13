@@ -1,13 +1,21 @@
 const { execSync } = require('child_process');
 
+// Node.js-level cache keyed by token+sql so different users never share results.
+// Coral's built-in cache is disabled (config.toml) because it strips SQL comments
+// before hashing, making per-user comment tricks ineffective.
+const nodeCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 function runCoral(sql, githubToken) {
+  const cacheKey = `${githubToken || 'anon'}::${sql}`;
+  const hit = nodeCache.get(cacheKey);
+  if (hit && Date.now() - hit.ts < CACHE_TTL_MS) {
+    return hit.result;
+  }
+
   try {
     const coralCmd = process.env.CORAL_BIN || 'coral';
-    // Append a per-user comment so Coral's query cache is keyed per user,
-    // preventing cached results from one user leaking to another.
-    const userTag = githubToken ? githubToken.slice(-10) : 'anon';
-    const taggedSql = `${sql} -- u:${userTag}`;
-    const escaped = taggedSql.replace(/"/g, '\\"').replace(/\n/g, ' ');
+    const escaped = sql.replace(/"/g, '\\"').replace(/\n/g, ' ');
     const env = {
       ...process.env,
       CORAL_CONFIG_DIR: process.env.CORAL_CONFIG_DIR
@@ -20,7 +28,9 @@ function runCoral(sql, githubToken) {
       env
     });
     const parsed = JSON.parse(result.toString());
-    return { success: true, data: parsed };
+    const success = { success: true, data: parsed };
+    nodeCache.set(cacheKey, { result: success, ts: Date.now() });
+    return success;
   } catch (err) {
     const message = err.message.split('\n')[0];
     console.error('Coral error:', message);
